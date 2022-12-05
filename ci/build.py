@@ -56,7 +56,6 @@ docker_login = subprocess.check_output(  # nosec
         account_id
     ).split()
 ).decode("utf-8")
-execute(docker_login)
 
 output("Building image")
 execute(
@@ -85,6 +84,8 @@ execute(
         args.image_name, account_id, branch, git_hash
     )
 )
+
+execute(docker_login)
 
 output("Pushing image to ECR")
 execute(

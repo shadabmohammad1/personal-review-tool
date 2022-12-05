@@ -1,0 +1,305 @@
+version: 2.1
+
+aliases:
+  - &install-node-dependencies
+    run:
+      name: Install node dependencies
+      command: yarn
+  - &save-node-cache
+    save_cache:
+      paths:
+        - node_modules
+      key: node-${CACHE_VERSION}-{{ checksum "package.json" }}
+  - &restore-node-cache
+    restore_cache:
+      keys:
+        - node-${CACHE_VERSION}-{{ checksum "package.json" }}
+  - &setup-python-base
+    run:
+      name: Setup python base
+      command: pip install pipenv
+  - &install-python-dependencies
+    run:
+      name: Install python dependencies
+      command: |
+        pipenv install --dev --deploy
+  - &save-python-cache
+    save_cache:
+      paths:
+        - .venv
+      key: python-${CACHE_VERSION}-{{ checksum "Pipfile" }}
+  - &restore-python-cache
+    restore_cache:
+      keys:
+        - python-${CACHE_VERSION}-{{ checksum "Pipfile" }}
+  - &persist-python-to-workspace
+    root: .
+    paths:
+      - .venv
+      - .env
+  - &attach-workspace
+    at: .
+  - &only-master
+    branches:
+      only:
+        - master
+  
+
+executors:
+  python_executor:
+    docker:
+      - image: python:3.9.15
+        environment:
+          PIPENV_VENV_IN_PROJECT: true
+  python_executor_with_postgres:
+    docker:
+      - image: python:3.9.15
+        environment:
+          PIPENV_VENV_IN_PROJECT: true
+          CELERY_TASK_ALWAYS_EAGER: true
+          DATABASE_URL: postgresql://postgres@localhost/review_tool?sslmode=disable
+          DISABLE_SSL: true
+          SECRET_KEY: s3cr3t
+      - image: circleci/postgres:11.2
+        environment:
+          POSTGRES_USER: postgres
+          POSTGRES_DB: review_tool
+  node_executor:
+    docker:
+      - image: node:16.14.2-slim
+
+
+jobs:
+  node-env:
+    executor: node_executor
+    steps:
+      - checkout
+      - *restore-node-cache
+      - *install-node-dependencies
+      - *save-node-cache
+
+  prettier:
+    executor: node_executor
+    steps:
+      - checkout
+      - *restore-node-cache
+      - run: yarn run prettier:check
+
+  linting:
+    executor: node_executor
+    steps:
+      - checkout
+      - *restore-node-cache
+      - run: yarn run lint
+
+  frontend-test:
+    executor: node_executor
+    steps:
+      - checkout
+      - *restore-node-cache
+      - run: yarn test
+
+  python-env:
+    executor: python_executor
+    steps:
+      - checkout
+      - *setup-python-base
+      - *restore-python-cache
+      - *install-python-dependencies
+      - *save-python-cache
+      - persist_to_workspace: *persist-python-to-workspace
+
+  black:
+    executor: python_executor
+    steps:
+      - checkout
+      - *setup-python-base
+      - *restore-python-cache
+      - run:
+          name: Run black
+          command: pipenv run black --check pyvideon
+
+  isort:
+    executor: python_executor
+    steps:
+      - checkout
+      - *setup-python-base
+      - *restore-python-cache
+      - run:
+          name: Run isort
+          command: pipenv run isort --check-only pyvideon/**/*.py
+
+  flake8:
+    executor: python_executor
+    steps:
+      - checkout
+      - *setup-python-base
+      - *restore-python-cache
+      - run:
+          name: Run flake8
+          command: pipenv run flake8 pyvideon/
+
+  pylama:
+    executor: python_executor
+    steps:
+      - checkout
+      - *setup-python-base
+      - *restore-python-cache
+      - run:
+          name: Run pylama
+          command: pipenv run pylama hotspring/
+
+  # migrations:
+  #   executor: python_executor_with_postgres
+  #   steps:
+  #     - checkout
+  #     - *setup-python-base
+  #     - *restore-python-cache
+  #     - run:
+  #         name: install library requirements
+  #         command: apt-get update && apt-get install libpangocairo-1.0-0
+  #     - run:
+  #         name: Run migrations
+  #         command: pipenv run python manage.py migrate
+  
+  # makemigrations-check:
+  #   executor: python_executor_with_postgres
+  #   steps:
+  #     - checkout
+  #     - *setup-python-base
+  #     - *restore-python-cache
+  #     - run:
+  #         name: install library requirements
+  #         command: apt-get update && apt-get install libpangocairo-1.0-0
+  #     - run:
+  #         name: check makemigrations is up to date
+  #         command: pipenv run python manage.py makemigrations --check
+
+  docker-build-and-push:
+    executor: python_executor
+    steps:
+      - checkout
+      - *setup-python-base
+      - setup_remote_docker:
+          version: 20.10.7
+          # docker_layer_caching: true # Paid service
+      - attach_workspace: *attach-workspace
+      - run:
+          name: build frontend
+          no_output_timeout: 30m
+          command: |
+            pipenv run python -u ./ci/build.py review-tool-frontend --dockerfile ./Dockerfile.node
+      - run:
+          name: build backend
+          no_output_timeout: 30m
+          command: |
+            pipenv run python -u ./ci/build.py review-tool-backend --dockerfile ./Dockerfile.python
+
+  deploy-staging:
+    executor: python_executor
+    steps:
+      - checkout
+      - attach_workspace: *attach-workspace
+      - run:
+          name: Create task defs in ap-south-1
+          environment:
+            AWS_DEFAULT_REGION: ap-south-1
+          command: |
+            pipenv run python ./ci/create_task_def.py staging review-tool-run-fargate-task-small FARGATE 1024 2048
+            pipenv run python ./ci/create_task_def.py staging review-tool-run-ec2-task-small EC2 1024 2048
+            pipenv run python ./ci/create_task_def.py staging review-tool-run-ec2-task-large EC2 1792 5602
+      - run:
+          name: Create task defs in us-west-2
+          environment:
+            AWS_DEFAULT_REGION: us-west-2
+          command: |
+            pipenv run python ./ci/create_task_def.py staging review-tool-run-fargate-task-small FARGATE 1024 2048
+            pipenv run python ./ci/create_task_def.py staging review-tool-run-ec2-task-small EC2 1024 2048
+            pipenv run python ./ci/create_task_def.py staging review-tool-run-ec2-task-large EC2 1792 5602
+      - run:
+          name: deploy review-tool
+          command: pipenv run python ci/deploy.py staging review-tool 2048 4096 --no-input
+
+  deploy-production:
+    executor: python_executor
+    steps:
+      - checkout
+      - attach_workspace: *attach-workspace
+      - run:
+          name: Create task defs in ap-south-1
+          environment:
+            AWS_DEFAULT_REGION: ap-south-1
+          command: |
+            pipenv run python ./ci/create_task_def.py production review-tool-run-fargate-task-small FARGATE 1024 2048
+            pipenv run python ./ci/create_task_def.py production review-tool-run-ec2-task-small EC2 1024 2048
+            pipenv run python ./ci/create_task_def.py production review-tool-run-ec2-task-large EC2 1792 29184
+      - run:
+          name: Create task defs in us-west-2
+          environment:
+            AWS_DEFAULT_REGION: us-west-2
+          command: |
+            pipenv run python ./ci/create_task_def.py production review-tool-run-fargate-task-small FARGATE 1024 2048
+            pipenv run python ./ci/create_task_def.py production review-tool-run-ec2-task-small EC2 1024 2048
+            pipenv run python ./ci/create_task_def.py production review-tool-run-ec2-task-large EC2 7096 29184
+      - run:
+          name: deploy review-tool
+          command: pipenv run python ci/deploy.py production review-tool 4096 8192 --no-input
+
+      
+workflows:
+  review-tool:
+    jobs:
+      # - node-env
+      # - prettier:
+      #     requires:
+      #       - node-env
+      # - linting:
+      #     requires:
+      #       - node-env
+      # - frontend-test:
+      #     requires:
+      #       - prettier
+      #       - linting
+      - python-env
+      - black:
+          requires:
+            - python-env
+      - isort:
+          requires:
+            - python-env
+      - flake8:
+          requires:
+            - python-env
+      - pylama:
+          requires:
+            - python-env
+      # - migrations:
+      #     requires:
+      #       - python-env
+      # - makemigrations-check:
+      #     requires:
+      #       - python-env
+      - docker-build-and-push:
+          context: staging
+          requires:
+            - black
+            - isort
+            - flake8
+            - pylama
+          filters: *only-master
+      - deploy-staging:
+          context: staging
+          requires:
+            - docker-build-and-push
+          filters: *only-master
+      - deploy-production-approval:
+          type: approval
+          requires:
+            - deploy-staging
+          filters: *only-master
+      - deploy-production:
+          context: production
+          requires:
+            - deploy-production-approval
+          filters: *only-master
+

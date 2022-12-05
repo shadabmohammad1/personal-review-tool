@@ -1,0 +1,13 @@
+version: "3"
+services:
+  hotspring:
+    build:
+      context: .
+      dockerfile: ./docker/Docker.server/Dockerfile
+    image: hotspring-local
+    env_file: .env
+    container_name: hotspring
+    ports:
+      - "5000:5000"
+    volumes:
+      - .:/code:rw

@@ -186,6 +186,12 @@ jobs:
           # docker_layer_caching: true # Paid service
       - attach_workspace: *attach-workspace
       - run:
+          name: Install AWS CLI
+          command: |
+            curl "https://awscli.amazonaws.com/awscli-exe-linux-aarch64.zip" -o "awscliv2.zip"
+            unzip awscliv2.zip
+            ./aws/install
+      - run:
           name: build frontend
           no_output_timeout: 30m
           command: |
@@ -262,18 +268,18 @@ workflows:
       #       - prettier
       #       - linting
       - python-env
-      - black:
-          requires:
-            - python-env
-      - isort:
-          requires:
-            - python-env
-      - flake8:
-          requires:
-            - python-env
-      - pylama:
-          requires:
-            - python-env
+      # - black:
+      #     requires:
+      #       - python-env
+      # - isort:
+      #     requires:
+      #       - python-env
+      # - flake8:
+      #     requires:
+      #       - python-env
+      # - pylama:
+      #     requires:
+      #       - python-env
       # - migrations:
       #     requires:
       #       - python-env
@@ -282,11 +288,11 @@ workflows:
       #       - python-env
       - docker-build-and-push:
           context: staging
-          requires:
-            - black
-            - isort
-            - flake8
-            - pylama
+          # requires:
+          #   - black
+          #   - isort
+          #   - flake8
+          #   - pylama
           filters: *only-master
       - deploy-staging:
           context: staging

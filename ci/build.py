@@ -52,7 +52,7 @@ username = getpass.getuser()
 
 # Configuring local docker to push to AWS ECR
 docker_login = subprocess.check_output(  # nosec
-    "aws ecr get-login --no-include-email --region us-west-2 --registry-ids {}".format(
+    "aws ecr get-login-password --no-include-email --region us-west-2 --registry-ids {}".format(
         account_id
     ).split()
 ).decode("utf-8")

@@ -288,7 +288,8 @@ workflows:
       #       - python-env
       - docker-build-and-push:
           context: staging
-          # requires:
+          requires:
+            - python-env
           #   - black
           #   - isort
           #   - flake8

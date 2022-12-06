@@ -51,11 +51,18 @@ branch = repo.active_branch.name.replace("/", "_")
 username = getpass.getuser()
 
 # Configuring local docker to push to AWS ECR
+# docker_login = subprocess.check_output(  # nosec
+#     "aws ecr get-login-password --no-include-email --region us-west-2 --registry-ids {}".format(
+#         account_id
+#     ).split()
+# ).decode("utf-8")
+
 docker_login = subprocess.check_output(  # nosec
-    "aws ecr get-login-password --no-include-email --region us-west-2 --registry-ids {}".format(
+    "aws ecr get-login-password --region us-west-2 | docker login --username AWS --password-stdin {}.dkr.ecr.region.amazonaws.com".format(
         account_id
     ).split()
 ).decode("utf-8")
+
 
 output("Building image")
 execute(

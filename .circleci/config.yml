@@ -49,12 +49,12 @@ aliases:
 executors:
   python_executor:
     docker:
-      - image: python:3.9.15
+      - image: cimg/python:3.9.15
         environment:
           PIPENV_VENV_IN_PROJECT: true
   python_executor_with_postgres:
     docker:
-      - image: python:3.9.15
+      - image: cimg/python:3.9.15
         environment:
           PIPENV_VENV_IN_PROJECT: true
           CELERY_TASK_ALWAYS_EAGER: true
@@ -104,7 +104,6 @@ jobs:
     executor: python_executor
     steps:
       - checkout
-      - *setup-python-base
       - *restore-python-cache
       - *install-python-dependencies
       - *save-python-cache
@@ -114,7 +113,6 @@ jobs:
     executor: python_executor
     steps:
       - checkout
-      - *setup-python-base
       - *restore-python-cache
       - run:
           name: Run black
@@ -124,7 +122,6 @@ jobs:
     executor: python_executor
     steps:
       - checkout
-      - *setup-python-base
       - *restore-python-cache
       - run:
           name: Run isort
@@ -134,7 +131,6 @@ jobs:
     executor: python_executor
     steps:
       - checkout
-      - *setup-python-base
       - *restore-python-cache
       - run:
           name: Run flake8
@@ -144,7 +140,6 @@ jobs:
     executor: python_executor
     steps:
       - checkout
-      - *setup-python-base
       - *restore-python-cache
       - run:
           name: Run pylama
@@ -180,17 +175,16 @@ jobs:
     executor: python_executor
     steps:
       - checkout
-      - *setup-python-base
       - setup_remote_docker:
           version: 20.10.7
           # docker_layer_caching: true # Paid service
       - attach_workspace: *attach-workspace
-      - run:
-          name: Install AWS CLI
-          command: |
-            curl "https://awscli.amazonaws.com/awscli-exe-linux-x86_64.zip" -o "awscliv2.zip"
-            unzip awscliv2.zip
-            ./aws/install
+      # - run:
+      #     name: Install AWS CLI
+      #     command: |
+      #       curl "https://awscli.amazonaws.com/awscli-exe-linux-x86_64.zip" -o "awscliv2.zip"
+      #       unzip awscliv2.zip
+      #       ./aws/install
       - run:
           name: build frontend
           no_output_timeout: 30m

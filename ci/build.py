@@ -57,12 +57,16 @@ username = getpass.getuser()
 #     ).split()
 # ).decode("utf-8")
 
-docker_login = subprocess.check_output(  # nosec
-    "aws ecr get-login-password --region us-west-2 | docker login --username AWS --password-stdin {}.dkr.ecr.region.amazonaws.com".format(
-        account_id
-    )
+docker_login = subprocess.Popen(  # nosec
+    "aws ecr get-login-password --region us-west-2".split()
 ).decode("utf-8")
+docker_login_2 = subprocess.check_output(
+    "docker login --username AWS --password-stdin {}.dkr.ecr.region.amazonaws.com".format(
+        account_id
+    ).split().decode("utf-8"),
+    stdin=docker_login.stdout)
 
+output(docker_login_2.stdout)
 
 output("Building image")
 execute(

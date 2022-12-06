@@ -59,12 +59,13 @@ username = getpass.getuser()
 
 docker_login = subprocess.Popen(  # nosec
     "aws ecr get-login-password --region us-west-2".split()
-).decode("utf-8")
+)
 docker_login_2 = subprocess.check_output(
     "docker login --username AWS --password-stdin {}.dkr.ecr.region.amazonaws.com".format(
         account_id
     ).split().decode("utf-8"),
-    stdin=docker_login.stdout)
+    stdin=docker_login.stdout
+).decode("utf-8")
 
 output(docker_login_2.stdout)
 

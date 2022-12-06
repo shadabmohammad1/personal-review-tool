@@ -14,10 +14,6 @@ aliases:
     restore_cache:
       keys:
         - node-${CACHE_VERSION}-{{ checksum "package.json" }}
-  - &setup-python-base
-    run:
-      name: Setup python base
-      command: pip install pipenv
   - &install-python-dependencies
     run:
       name: Install python dependencies
@@ -149,7 +145,6 @@ jobs:
   #   executor: python_executor_with_postgres
   #   steps:
   #     - checkout
-  #     - *setup-python-base
   #     - *restore-python-cache
   #     - run:
   #         name: install library requirements
@@ -162,7 +157,6 @@ jobs:
   #   executor: python_executor_with_postgres
   #   steps:
   #     - checkout
-  #     - *setup-python-base
   #     - *restore-python-cache
   #     - run:
   #         name: install library requirements
@@ -179,12 +173,12 @@ jobs:
           version: 20.10.7
           # docker_layer_caching: true # Paid service
       - attach_workspace: *attach-workspace
-      # - run:
-      #     name: Install AWS CLI
-      #     command: |
-      #       curl "https://awscli.amazonaws.com/awscli-exe-linux-x86_64.zip" -o "awscliv2.zip"
-      #       unzip awscliv2.zip
-      #       ./aws/install
+      - run:
+          name: Install AWS CLI
+          command: |
+            curl "https://awscli.amazonaws.com/awscli-exe-linux-x86_64.zip" -o "awscliv2.zip"
+            unzip awscliv2.zip
+            ./aws/install
       - run:
           name: build frontend
           no_output_timeout: 30m
